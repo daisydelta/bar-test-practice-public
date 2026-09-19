@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALAC Exam Drill</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Crimson Text', 'Georgia', serif; background-color: #EDE6D3; padding: 2rem 1rem; color: #4a4a45; }
+  .container { max-width: 900px; margin: 0 auto; }
+
+.header { border: 3px solid #4a4a45; border-radius: 2px; padding: 2rem; background-color: #F5F0E3; margin-bottom: 2rem; position: relative; }
+.header::before { content: ''; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px; border: 1px solid #C9A97A; pointer-events: none; }
+.header-content { position: relative; z-index: 1; }
+.subtitle { font-size: 12px; letter-spacing: 2px; color: #A68B63; margin-bottom: 0.5rem; text-transform: uppercase; }
+.title { font-size: 3.5rem; font-weight: 700; color: #5C2E1F; margin-bottom: 1.5rem; line-height: 1; }
+.description { font-size: 1rem; line-height: 1.8; color: #6b6b65; }
+
+.section { margin-bottom: 2.5rem; }
+.section-title { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #A68B63; margin-bottom: 1.2rem; font-weight: 600; }
+
+.topic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.topic-btn { padding: 1.2rem 1rem; border: 1px solid #C9A97A; background-color: #F5F0E3; color: #6b6b65; font-family: 'Courier New', monospace; font-size: 0.95rem; cursor: pointer; transition: all 0.3s; text-align: center; }
+.topic-btn:hover { background-color: #E8DCC9; border-color: #A68B63; }
+.topic-btn.active { background-color: #5C2E1F; color: #F5F0E3; border-color: #5C2E1F; }
+
+.syllabus-area { border: 1px solid #C9A97A; padding: 1.5rem; background-color: #F5F0E3; margin-bottom: 1.5rem; }
+.syllabus-area textarea { width: 100%; padding: 1rem; border: 1px solid #C9A97A; background-color: #FFFAF0; font-family: inherit; font-size: 0.95rem; resize: vertical; min-height: 120px; color: #4a4a45; }
+.syllabus-area textarea::placeholder { color: #A68B63; }
+
+.btn-generate { background-color: #5C2E1F; color: #F5F0E3; padding: 1rem 3rem; border: none; font-family: 'Courier New', monospace; font-size: 1rem; letter-spacing: 1px; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
+.btn-generate:hover { background-color: #4a2115; }
+
+.question-section { display: none; background-color: #F5F0E3; border: 1px solid #C9A97A; padding: 2rem; margin-bottom: 2rem; }
+.question-section.show { display: block; }
+.question-box { background-color: #FFFAF0; padding: 1.5rem; border-left: 4px solid #C9A97A; margin-bottom: 1.5rem; font-size: 1rem; line-height: 1.8; }
+
+.alac-inputs { display: none; }
+.alac-inputs.show { display: block; }
+.alac-field { margin-bottom: 2rem; }
+.field-label { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; color: #5C2E1F; letter-spacing: 0.5px; }
+.field-label .component { display: inline-block; background-color: #5C2E1F; color: #F5F0E3; padding: 0.2rem 0.6rem; margin-right: 0.5rem; font-size: 0.85rem; }
+textarea.alac-input { width: 100%; padding: 1rem; border: 1px solid #C9A97A; background-color: #FFFAF0; font-family: inherit; font-size: 0.95rem; resize: vertical; min-height: 100px; color: #4a4a45; }
+
+.button-group { display: flex; gap: 1rem; margin-top: 2rem; }
+.btn-submit { background-color: #5C2E1F; color: #F5F0E3; padding: 0.8rem 2rem; border: none; font-family: 'Courier New', monospace; font-size: 0.9rem; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; flex: 1; }
+.btn-submit:hover { background-color: #4a2115; }
+.btn-clear { background-color: transparent; color: #5C2E1F; padding: 0.8rem 2rem; border: 1px solid #C9A97A; font-family: 'Courier New', monospace; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; flex: 1; }
+.btn-clear:hover { background-color: #E8DCC9; }
+
+.feedback-section { display: none; background-color: #F5F0E3; border: 1px solid #C9A97A; padding: 2rem; margin-top: 2rem; }
+.feedback-section.show { display: block; }
+.component-title { font-weight: 600; font-size: 1rem; color: #5C2E1F; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #C9A97A; }
+.feedback-text { font-size: 0.95rem; line-height: 1.8; color: #6b6b65; background-color: #FFFAF0; padding: 1rem; margin-bottom: 1rem; white-space: pre-wrap; }
+
+.rating { font-size: 1.1rem; font-weight: 600; color: #5C2E1F; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #C9A97A; }
+
+.error { color: #8B4513; font-size: 0.9rem; margin-top: 0.5rem; }
+.loading { text-align: center; padding: 2rem; color: #A68B63; }
+
+.note { background-color: #FFFAF0; border-left: 3px solid #C9A97A; padding: 1rem; margin-bottom: 1rem; font-size: 0.9rem; }
+
+@media (max-width: 600px) {
+.title { font-size: 2.5rem; }
+.button-group { flex-direction: column; }
+} </style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-content">
+      <div class="subtitle">Consti 1 · Exam Drill</div>
+      <h1 class="title">ALAC Exam Drill</h1>
+      <p class="description">
+        Pick a topic, get a hypothetical question, answer it in Answer / Legal Basis /
+        Application / Conclusion format, then submit for grading with a model answer per component.
+      </p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Topic Focus</div>
+
+```
+<div class="topic-grid">
+  <button class="topic-btn active" onclick="selectTopic(this, 'random')">
+    Random / Mixed
+  </button>
+
+  <button class="topic-btn" onclick="selectTopic(this, 'political')">
+    Political Law
+  </button>
+
+  <button class="topic-btn" onclick="selectTopic(this, 'statcon')">
+    Statutory Construction
+  </button>
+
+  <button class="topic-btn" onclick="selectTopic(this, 'blje')">
+    BLJE
+  </button>
+
+  <button class="topic-btn" onclick="selectTopic(this, 'philosophy')">
+    Philosophy of Law
+  </button>
+</div>
+```
+
+  </div>
+
+  <div class="section">
+
+```
+<div class="section-title">Syllabus Coverage (Optional)</div>
+
+<div class="syllabus-area">
+
+  <textarea
+    id="syllabus"
+    placeholder="Paste your syllabus topics, cases, or doctrines here — the question generator and grading will stay within this scope."
+  ></textarea>
+
+</div>
+
+<div class="note">
+  <strong>Note:</strong>
+  This tool requires an internet connection and uses OpenRouter to access the AI model.
+</div>
+```
+
+  </div>
+
+  <button class="btn-generate" onclick="generateQuestion()">
+    Generate Question
+  </button>
+
+  <div class="question-section" id="questionSection">
+
+```
+<div class="section-title">Question</div>
+
+<div class="question-box" id="questionText"></div>
+```
+
+  </div>
+
+  <div class="alac-inputs" id="alacInputs">
+
+```
+<div class="alac-field">
+
+  <label class="field-label">
+    <span class="component">A</span>Answer
+  </label>
+
+  <textarea
+    class="alac-input"
+    id="answer"
+    placeholder="State your direct answer to the question."
+  ></textarea>
+
+  <div class="error" id="answerError"></div>
+
+</div>
+
+<div class="alac-field">
+
+  <label class="field-label">
+    <span class="component">L</span>Legal Basis
+  </label>
+
+  <textarea
+    class="alac-input"
+    id="legalBasis"
+    placeholder="Cite the constitutional provisions, statutes, or jurisprudence that support your answer."
+  ></textarea>
+
+  <div class="error" id="legalError"></div>
+
+</div>
+
+<div class="alac-field">
+
+  <label class="field-label">
+    <span class="component">A</span>Application
+  </label>
+
+  <textarea
+    class="alac-input"
+    id="application"
+    placeholder="Apply the legal basis to the specific facts of the question."
+  ></textarea>
+
+  <div class="error" id="appError"></div>
+
+</div>
+
+<div class="alac-field">
+
+  <label class="field-label">
+    <span class="component">C</span>Conclusion
+  </label>
+
+  <textarea
+    class="alac-input"
+    id="conclusion"
+    placeholder="Restate your conclusion firmly."
+  ></textarea>
+
+  <div class="error" id="concError"></div>
+
+</div>
+
+<div class="button-group">
+
+  <button class="btn-submit" onclick="submitAnswer()">
+    Submit Answer
+  </button>
+
+  <button class="btn-clear" onclick="resetAnswers()">
+    Clear
+  </button>
+
+</div>
+```
+
+  </div>
+
+  <div class="feedback-section" id="feedbackSection">
+
+```
+<div class="section-title">Grading & Feedback</div>
+
+<div id="feedbackContent"></div>
+```
+
+  </div>
+
+</div>
+
+<script>
+
+let selectedTopic = 'random';
+let currentQuestion = null;
+
+
+function selectTopic(btn, topic) {
+
+  selectedTopic = topic;
+
+  document
+    .querySelectorAll('.topic-btn')
+    .forEach(b => b.classList.remove('active'));
+
+  btn.classList.add('active');
+}
+
+
+async function generateQuestion() {
+
+  const syllabus =
+    document.getElementById('syllabus').value.trim();
+
+  const syllabusContext = syllabus
+    ? `\n\nLimit the question to this scope:\n${syllabus}`
+    : '';
+
+
+  const topicMap = {
+
+    random:
+      'any topic from Philippine Constitutional Law, Statutory Construction, Legal Ethics, or Philosophy of Law',
+
+    political:
+      'Philippine Political Law and Constitutional Law',
+
+    statcon:
+      'Statutory Construction and interpretation methods',
+
+    blje:
+      'Basic Legal and Judicial Ethics and professional responsibility',
+
+    philosophy:
+      'Philosophy of Law and legal theory'
+
+  };
+
+
+  const prompt = `You are a law professor creating a hypothetical bar exam question for a 1L student studying ${topicMap[selectedTopic]}.
+
+Generate ONE hypothetical exam question that:
+
+- Is realistic and moderately complex
+- Tests understanding, not just memorization
+- Includes specific facts requiring legal analysis
+- Requires a clear yes/no or definitive answer
+- Can be answered using the ALAC method
+- Is approximately 150-250 words
+
+${syllabusContext}
+
+Return ONLY the question text, nothing else.`;
+
+
+  document
+    .getElementById('questionSection')
+    .classList.add('show');
+
+  document
+    .getElementById('questionText')
+    .innerHTML =
+      '<div class="loading">Generating question...</div>';
+
+  document
+    .getElementById('alacInputs')
+    .classList.add('show');
+
+
+  try {
+
+    const response = await fetch(
+      "/api/generate-question",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          prompt: prompt
+        })
+      }
+    );
+
+
+    if (!response.ok) {
+
+      const errorText = await response.text();
+
+      throw new Error(
+        errorText || "API request failed."
+      );
+
+    }
+
+
+    const data = await response.json();
+
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+
+    currentQuestion = data.text;
+
+
+    if (!currentQuestion) {
+      throw new Error("No question was returned by the AI.");
+    }
+
+
+    document
+      .getElementById('questionText')
+      .textContent = currentQuestion;
+
+    document
+      .getElementById('feedbackSection')
+      .classList.remove('show');
+
+    resetAnswers();
+
+  }
+
+  catch (error) {
+
+    document
+      .getElementById('questionText')
+      .innerHTML =
+        '<div class="error">Error generating question: '
+        + escapeHtml(error.message)
+        + '</div>';
+
+  }
+
+}
+
+
+function resetAnswers() {
+
+  document.getElementById('answer').value = '';
+  document.getElementById('legalBasis').value = '';
+  document.getElementById('application').value = '';
+  document.getElementById('conclusion').value = '';
+
+  document
+    .querySelectorAll('.error')
+    .forEach(e => e.textContent = '');
+
+  document
+    .getElementById('feedbackSection')
+    .classList.remove('show');
+
+}
+
+
+async function submitAnswer() {
+
+  const answer =
+    document.getElementById('answer').value.trim();
+
+  const legalBasis =
+    document.getElementById('legalBasis').value.trim();
+
+  const application =
+    document.getElementById('application').value.trim();
+
+  const conclusion =
+    document.getElementById('conclusion').value.trim();
+
+
+  let hasError = false;
+
+
+  if (!answer) {
+
+    document.getElementById('answerError').textContent =
+      'Answer is required';
+
+    hasError = true;
+
+  }
+
+
+  if (!legalBasis) {
+
+    document.getElementById('legalError').textContent =
+      'Legal Basis is required';
+
+    hasError = true;
+
+  }
+
+
+  if (!application) {
+
+    document.getElementById('appError').textContent =
+      'Application is required';
+
+    hasError = true;
+
+  }
+
+
+  if (!conclusion) {
+
+    document.getElementById('concError').textContent =
+      'Conclusion is required';
+
+    hasError = true;
+
+  }
+
+
+  if (hasError) return;
+
+
+  if (!currentQuestion) {
+
+    document.getElementById('feedbackSection').classList.add('show');
+
+    document.getElementById('feedbackContent').innerHTML =
+      '<div class="error">Please generate a question first.</div>';
+
+    return;
+
+  }
+
+
+  const gradingPrompt = `You are a law professor grading a student's ALAC (Answer, Legal Basis, Application, Conclusion) exam answer.
+
+Question:
+
+${currentQuestion}
+
+
+Student's ALAC Answer:
+
+A (Answer):
+${answer}
+
+L (Legal Basis):
+${legalBasis}
+
+A (Application):
+${application}
+
+C (Conclusion):
+${conclusion}
+
+
+Provide feedback in this exact format:
+
+**ANSWER Component:**
+[Brief evaluation of whether the answer is direct, clear, and responsive to the question]
+
+**LEGAL BASIS Component:**
+[Evaluation of the legal citations, accuracy of principles cited, completeness of the legal framework]
+
+**APPLICATION Component:**
+[Evaluation of how well the legal basis was applied to the facts, logical reasoning, and addressing counterarguments]
+
+**CONCLUSION Component:**
+[Evaluation of whether the conclusion is firm, consistent with the answer, and properly supported]
+
+**Overall Strengths:**
+[List 2-3 key strengths]
+
+**Areas for Improvement:**
+[List 2-3 areas that need strengthening]
+
+**Sample Model Answer:**
+[Provide a concise model ALAC answer for comparison]
+
+**Rating:** [X/5 stars] - [One-line justification]`;
+
+
+  document
+    .getElementById('feedbackSection')
+    .classList.add('show');
+
+  document
+    .getElementById('feedbackContent')
+    .innerHTML =
+      '<div class="loading">Grading your answer...</div>';
+
+
+  try {
+
+    const response = await fetch(
+      "/api/grade-answer",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          prompt: gradingPrompt
+        })
+      }
+    );
+
+
+    if (!response.ok) {
+
+      const errorText = await response.text();
+
+      throw new Error(
+        errorText || "API request failed."
+      );
+
+    }
+
+
+    const data = await response.json();
+
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+
+    const feedback = data.text;
+
+
+    if (!feedback) {
+      throw new Error("No grading feedback was returned.");
+    }
+
+
+    document
+      .getElementById('feedbackContent')
+      .innerHTML =
+        `<div class="feedback-text">${escapeHtml(feedback)}</div>`;
+
+  }
+
+  catch (error) {
+
+    document
+      .getElementById('feedbackContent')
+      .innerHTML =
+        '<div class="error">Error grading answer: '
+        + escapeHtml(error.message)
+        + '</div>';
+
+  }
+
+}
+
+
+function escapeHtml(text) {
+
+  const div = document.createElement('div');
+
+  div.textContent = text;
+
+  return div.innerHTML;
+
+}
+
+</script>
+
+</body>
+</html>
