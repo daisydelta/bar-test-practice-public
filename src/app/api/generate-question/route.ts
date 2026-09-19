@@ -538,13 +538,9 @@ Return exactly:
           ),
 
           legalReferences: {
-            create:
-              verifiedReferences.map(
-                (ref) => ({
-                  legalReferenceId:
-                    ref.id,
-                })
-              ),
+            connect: verifiedReferences.map((ref) => ({
+              id: ref.id,
+            })),
           },
         },
       });
