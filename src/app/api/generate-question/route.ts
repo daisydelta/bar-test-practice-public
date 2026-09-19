@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+function parseJsonResponse(text: string): any {
+  let cleaned = text.trim();
+
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+  }
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(cleaned);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -84,15 +104,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use only a small number of verified references
-    // to keep the AI request fast and reliable.
     const verifiedReferences =
       await prisma.legalReference.findMany({
         where: {
           verificationStatus: "VERIFIED",
           topicId: topic.id,
         },
-        take: 5,
+        take: 3,
       });
 
     let referenceText =
@@ -106,9 +124,8 @@ export async function POST(request: NextRequest) {
         .join("\n");
     }
 
-    // Keep the prompt intentionally short for Qwen7B.
     const prompt = `
-Create one Philippine Bar Examination essay question.
+Create ONE Philippine Bar Examination essay question.
 
 Subject: ${subject.name}
 Topic: ${topic.name}
@@ -118,141 +135,358 @@ Difficulty: ${difficulty}
 Verified legal authorities:
 ${referenceText}
 
-Rules:
+PRIMARY OBJECTIVE:
+
+The question must test the selected Subject, Topic, and Focus.
+
+The examinee must be able to determine the answer by applying the
+specific legal doctrine identified by the Topic and Focus to the facts.
+
+Do NOT create a question where an unrelated legal issue becomes necessary
+to determine the answer.
+
+QUESTION COHERENCE RULES:
+
+1. The selected Topic and Focus must be the principal legal issue.
+
+2. Every important fact must be relevant to resolving that issue.
+
+3. Do not introduce a secondary legal issue that could independently
+change the answer unless the question expressly asks the examinee
+to resolve that issue.
+
+4. Do not make the examinee guess which doctrine the examiner wants.
+
+5. Do not create a fact pattern where two different legal doctrines can
+reasonably produce different answers unless the question expressly
+requires the examinee to analyze both.
+
+6. If a fact introduces an exception, defense, constitutional issue,
+statutory limitation, or another competing legal rule that could
+materially affect the result, either:
+- make that issue part of the express question and provide the
+necessary verified authority; OR
+- remove or revise that fact.
+
+7. The question must have one principal, legally defensible answer.
+
+8. The recommended answer must answer the question actually asked.
+Do not answer a different legal question.
+
+9. Do not create a question merely because the facts sound realistic.
+Legal coherence is more important than dramatic facts.
+
+10. Avoid unnecessary emergency, medical, moral, constitutional,
+criminal, contractual, or procedural facts when they are unrelated
+to the selected Topic and Focus.
+
+LEGAL ACCURACY RULES:
+
 - Use Philippine law only.
-- Use only the verified authorities listed above.
-- Do not invent cases, citations, statutes, constitutional provisions, or doctrines.
-- Create realistic facts and one clear legal issue.
-- Make it answerable using ALAC.
+- Use only the verified legal authorities listed above.
+- Do not invent cases, statutes, constitutional provisions, rules,
+doctrines, citations, or legal exceptions.
+- Do not invent a real-looking Republic Act number or case citation.
+- Do not attribute a hypothetical rule to an actual Philippine law.
+- If a hypothetical statutory provision is necessary, clearly identify
+it as hypothetical.
+- Do not rely on an authority that is not included in the verified
+references.
+- Do not invent an exception simply to create a more interesting answer.
+- Do not ignore an applicable exception that is actually established
+by the supplied authorities.
+
+STATUTORY CONSTRUCTION RULES:
+
+If the selected Topic or Focus concerns statutory construction:
+
+- Identify the specific rule of statutory construction being tested.
+- Construct facts that allow that rule to be applied directly.
+- If the statute is clear and unambiguous and the question concerns
+verba legis, the facts should allow the examinee to apply the plain
+meaning of the text without requiring an unrelated legal defense.
+- Do not assume that every clear statute automatically settles every
+question of criminal liability, constitutionality, or legal validity.
+- If constitutionality is intended to be tested, expressly make
+constitutionality part of the question.
+- If criminal liability or a criminal-law defense is intended to be
+tested, expressly make that issue part of the question.
+- Do not combine verba legis with an unrelated defense merely to make
+the question difficult.
+
+SPECIAL QUESTION-DESIGN RULE:
+
+When the Focus identifies a specific doctrine, build the question
+around a direct conflict involving that doctrine.
+
+For example, if the Focus is VERBA LEGIS:
+
+- Use a clear statutory provision.
+- Give the examinee a party's proposed interpretation of that provision.
+- Ask whether that interpretation is correct under verba legis.
+- Do NOT introduce an emergency, necessity defense, criminal liability,
+constitutional challenge, or other independent issue unless that issue
+is expressly part of the question.
+- The answer must turn primarily on the meaning of the statutory text.
+
+If the Focus is another statutory-construction doctrine, structure the
+facts so that doctrine is directly necessary to resolve the question.
+
+Do not use dramatic facts merely to make the question realistic.
+
+LEGAL DEFENSIBILITY CHECK:
+
+Before producing the final question, internally check:
+
+A. What exact doctrine is being tested?
+B. What is the single principal legal issue?
+C. What facts are legally relevant to that issue?
+D. Does any fact introduce another legal rule that could change the answer?
+E. If yes, is that secondary rule intentionally being tested?
+F. Can the recommended answer be supported by the verified authorities?
+G. Does the recommended answer directly resolve the question asked?
+H. Is there only one principal legally defensible answer?
+
+If the answer to D is YES and E is NO, revise the facts before returning
+the question.
+
+RECOMMENDED ANSWER:
+
+The recommended answer must contain:
+
+- Answer: the direct answer to the principal legal issue.
+- Legal Basis: the controlling rule, doctrine, statute, constitutional
+provision, or jurisprudence supported by the verified authorities.
+- Application: application of that rule to the facts given.
+- Conclusion: the resulting legal consequence.
+
+Do not choose an answer merely because it follows the literal wording
+of a statute.
+
+Do not choose an answer merely because it produces a sympathetic result.
+
+Choose the answer that follows from the controlling legal rule and the
+facts presented.
+
+BAR EXAM STYLE:
+
+- Realistic Philippine Bar Examination style.
+- Concise but sufficiently detailed facts.
+- ONE principal legal issue.
+- Clear question.
+- No unnecessary facts.
+- Difficulty: ${difficulty}.
+- The question should test legal reasoning, not keyword matching.
+
+OUTPUT RULES:
+
 - Return JSON only.
+- No markdown.
+- No commentary outside the JSON.
+- Ensure valid JSON.
+- Use double quotes for JSON strings.
+- Escape quotation marks inside JSON strings.
+- Do not include trailing text after the JSON.
 
 Return exactly:
+
 {
-  "title": "Short title",
-  "factsIssue": "Facts followed by the legal question",
+  "title": "Short descriptive title",
+  "factsIssue": "Concise factual scenario followed by the specific legal question",
   "difficulty": "${difficulty}",
   "recommendedAnswer": {
-    "answerA": "Direct answer",
-    "legalBasisL": "Legal basis",
-    "applicationA": "Application to the facts",
-    "conclusionC": "Short conclusion"
+    "answerA": "Direct answer to the principal legal issue",
+    "legalBasisL": "Controlling legal basis",
+    "applicationA": "Application of the controlling rule to the facts",
+    "conclusionC": "Short final conclusion"
   },
-  "howToAnswer": "Brief Bar exam answering approach"
+  "howToAnswer": "One short Bar exam answering approach"
 }
 `;
 
-    const omniRouteBaseUrl =
-      process.env.OMNIROUTE_BASE_URL ||
-      "http://localhost:20128/v1";
+    const isVercel = process.env.VERCEL === "1";
 
-    const omniRouteApiKey =
-      process.env.OMNIROUTE_API_KEY;
+    const apiKey = isVercel
+      ? process.env.OPENROUTER_API_KEY
+      : process.env.OMNIROUTE_API_KEY;
 
-    if (!omniRouteApiKey) {
+    if (!apiKey) {
       return NextResponse.json(
         {
-          error:
-            "OMNIROUTE_API_KEY is not configured.",
+          error: isVercel
+            ? "OPENROUTER_API_KEY is not configured."
+            : "OMNIROUTE_API_KEY is not configured.",
         },
         { status: 500 }
       );
     }
 
-    const omniResponse = await fetch(
-      `${omniRouteBaseUrl}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:
-            `Bearer ${omniRouteApiKey}`,
-        },
-        body: JSON.stringify({
-          model: "free-ai/qwen7b",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a Philippine Bar Examination question writer. Return valid JSON only.",
+    const baseUrl = isVercel
+      ? "https://openrouter.ai/api/v1"
+      : process.env.OMNIROUTE_BASE_URL ||
+        "http://localhost:20128/v1";
+
+    const model = isVercel
+      ? "openrouter/free"
+      : "free-ai/qwen7b";
+
+    let generated: any = null;
+    let lastErrorText = "";
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(
+          `AI generation attempt ${attempt}/2`,
+          {
+            provider: isVercel
+              ? "OpenRouter"
+              : "OmniRoute",
+            model,
+          }
+        );
+
+        const aiResponse = await fetch(
+          `${baseUrl}/chat/completions`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+
+              ...(isVercel
+                ? {
+                    "HTTP-Referer":
+                      "https://bar-test-practice.vercel.app",
+                    "X-Title":
+                      "Philippine Bar Test Practice",
+                  }
+                : {}),
             },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          temperature: 0.2,
-          max_tokens: 700,
-        }),
+
+            body: JSON.stringify({
+              model,
+
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent and concise.",
+                },
+                {
+                  role: "user",
+                  content: prompt,
+                },
+              ],
+
+              temperature: 0.2,
+              max_tokens: 500,
+            }),
+          }
+        );
+
+        if (!aiResponse.ok) {
+          lastErrorText =
+            await aiResponse.text();
+
+          console.error(
+            `AI generation attempt ${attempt} failed:`,
+            lastErrorText
+          );
+
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000)
+            );
+          }
+
+          continue;
+        }
+
+        const aiData =
+          await aiResponse.json();
+
+        const content =
+          aiData?.choices?.[0]?.message?.content;
+
+        if (!content) {
+          lastErrorText =
+            "The AI model returned an empty response.";
+
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000)
+            );
+          }
+
+          continue;
+        }
+
+        try {
+          generated =
+            parseJsonResponse(
+              String(content)
+            );
+        } catch (error) {
+          lastErrorText =
+            "The AI model returned incomplete or invalid JSON.";
+
+          console.error(
+            "Invalid JSON from model:",
+            content
+          );
+
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000)
+            );
+          }
+
+          continue;
+        }
+
+        if (
+          generated?.title &&
+          generated?.factsIssue &&
+          generated?.recommendedAnswer
+        ) {
+          break;
+        }
+
+        generated = null;
+
+        lastErrorText =
+          "The generated question is missing required fields.";
+
+        if (attempt < 2) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000)
+          );
+        }
+      } catch (error) {
+        lastErrorText =
+          error instanceof Error
+            ? error.message
+            : String(error);
+
+        console.error(
+          `AI generation attempt ${attempt} error:`,
+          lastErrorText
+        );
+
+        if (attempt < 2) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000)
+          );
+        }
       }
-    );
-
-    if (!omniResponse.ok) {
-      const errorText =
-        await omniResponse.text();
-
-      console.error(
-        "OmniRoute error:",
-        errorText
-      );
-
-      return NextResponse.json(
-        {
-          error: "OmniRoute request failed.",
-          details: errorText,
-        },
-        { status: 502 }
-      );
     }
 
-    const omniData =
-      await omniResponse.json();
-
-    const content =
-      omniData?.choices?.[0]?.message?.content;
-
-    if (!content) {
+    if (!generated) {
       return NextResponse.json(
         {
           error:
-            "The AI model returned an empty response.",
-        },
-        { status: 502 }
-      );
-    }
-
-    let generated;
-
-    try {
-      generated =
-        typeof content === "string"
-          ? JSON.parse(content)
-          : content;
-    } catch {
-      console.error(
-        "Invalid JSON from model:",
-        content
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            "The AI model returned invalid JSON.",
-          raw: content,
-        },
-        { status: 502 }
-      );
-    }
-
-    if (
-      !generated.title ||
-      !generated.factsIssue ||
-      !generated.recommendedAnswer
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "The generated question is missing required fields.",
-          generated,
+            "The AI model could not generate a valid question after retry.",
+          details: lastErrorText,
         },
         { status: 502 }
       );
@@ -263,32 +497,40 @@ Return exactly:
         data: {
           subjectId: subject.id,
           topicId: topic.id,
-          title: String(generated.title),
+
+          title: String(
+            generated.title
+          ),
+
           factsIssue: String(
             generated.factsIssue
           ),
-          difficulty: difficulty,
+
+          difficulty,
+
           questionSource: "AI_GENERATED",
-          verificationStatus: "NEEDS_REVIEW",
+
+          verificationStatus:
+            "NEEDS_REVIEW",
 
           bestAnswerA: String(
             generated.recommendedAnswer
-              .answerA || ""
+              ?.answerA || ""
           ),
 
           bestAnswerL: String(
             generated.recommendedAnswer
-              .legalBasisL || ""
+              ?.legalBasisL || ""
           ),
 
           bestAnswerA2: String(
             generated.recommendedAnswer
-              .applicationA || ""
+              ?.applicationA || ""
           ),
 
           bestAnswerC: String(
             generated.recommendedAnswer
-              .conclusionC || ""
+              ?.conclusionC || ""
           ),
 
           howToAnswer: String(
@@ -296,11 +538,13 @@ Return exactly:
           ),
 
           legalReferences: {
-            create: verifiedReferences.map(
-              (ref) => ({
-                legalReferenceId: ref.id,
-              })
-            ),
+            create:
+              verifiedReferences.map(
+                (ref) => ({
+                  legalReferenceId:
+                    ref.id,
+                })
+              ),
           },
         },
       });
@@ -308,8 +552,10 @@ Return exactly:
     return NextResponse.json({
       success: true,
       question,
+
       verificationStatus:
         "NEEDS_REVIEW",
+
       message:
         "Question generated successfully.",
     });
@@ -323,6 +569,7 @@ Return exactly:
       {
         error:
           "An unexpected error occurred while generating the question.",
+
         details:
           error instanceof Error
             ? error.message

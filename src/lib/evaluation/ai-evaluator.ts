@@ -1,4 +1,3 @@
-
 import { prisma } from "@/lib/db";
 import {
   EvaluationRequest,
@@ -66,11 +65,35 @@ export class AIEvaluationService implements IEvaluationService {
       throw new Error(`Question with id ${questionId} not found`);
     }
 
-    const apiKey = process.env.OMNIROUTE_API_KEY;
+    /*
+     * LOCAL:
+     *   OmniRoute → Qwen7B
+     *
+     * VERCEL:
+     *   OpenRouter → hosted model
+     */
+    const isVercel = process.env.VERCEL === "1";
+
+    const apiKey = isVercel
+      ? process.env.OPENROUTER_API_KEY
+      : process.env.OMNIROUTE_API_KEY;
 
     if (!apiKey) {
-      throw new Error("OMNIROUTE_API_KEY is not configured.");
+      throw new Error(
+        isVercel
+          ? "OPENROUTER_API_KEY is not configured."
+          : "OMNIROUTE_API_KEY is not configured."
+      );
     }
+
+    const baseUrl = isVercel
+      ? "https://openrouter.ai/api/v1"
+      : process.env.OMNIROUTE_BASE_URL ||
+        "http://localhost:20128/v1";
+
+    const model = isVercel
+      ? "openrouter/free"
+      : "free-ai/qwen7b";
 
     const verifiedReferences = question.legalReferences
       .filter((ref) => ref.verificationStatus === "VERIFIED")
@@ -149,20 +172,24 @@ Rules:
 - Do not use markdown.
 `;
 
-    const omniRouteBaseUrl =
-      process.env.OMNIROUTE_BASE_URL ||
-      "http://localhost:20128/v1";
-
     const response = await fetch(
-      `${omniRouteBaseUrl}/chat/completions`,
+      `${baseUrl}/chat/completions`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
+          ...(isVercel
+            ? {
+                "HTTP-Referer":
+                  "https://bar-test-practice.vercel.app",
+                "X-Title":
+                  "Philippine Bar Test Practice",
+              }
+            : {}),
         },
         body: JSON.stringify({
-          model: "free-ai/qwen7b",
+          model,
           messages: [
             {
               role: "system",
@@ -185,7 +212,7 @@ Rules:
     if (!response.ok) {
       throw new Error(
         data?.error?.message ||
-          "OmniRoute evaluation request failed."
+          "AI evaluation request failed."
       );
     }
 
@@ -193,7 +220,7 @@ Rules:
 
     if (!text) {
       throw new Error(
-        "OmniRoute returned an empty evaluation."
+        "AI provider returned an empty evaluation."
       );
     }
 
