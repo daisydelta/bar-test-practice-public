@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
@@ -362,66 +361,62 @@ Return exactly:
 }
 `;
 
-    const apiKey = process.env.OMNIROUTE_API_KEY;
+    /*
+     * PRODUCTION AI CONNECTION
+     *
+     * Vercel now calls OpenRouter directly.
+     *
+     * This removes the dependency on:
+     * Vercel -> Cloudflare Tunnel -> OmniRoute -> OpenRouter
+     *
+     * The production path is now:
+     * Vercel -> OpenRouter -> Gemini
+     */
+
+    const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            "OMNIROUTE_API_KEY is not configured.",
+            "OPENROUTER_API_KEY is not configured.",
         },
         { status: 500 }
       );
     }
 
-    const baseUrl =
-      process.env.OMNIROUTE_BASE_URL ||
-      "http://localhost:20128/v1";
-
-    /*
-     * Primary model comes from Vercel environment variables.
-     *
-     * If the primary model returns a provider error such as 503,
-     * automatically try the fallback models instead of retrying
-     * the same unavailable model.
-     */
-    const primaryModel =
-      process.env.OMNIROUTE_MODEL ||
-      "gemini-3-flash-preview";
-
-    const fallbackModels = [
-      primaryModel,
-      "gemini/gemini-3-flash-preview",
-      "gemini/gemini-2.5-flash",
-    ].filter(
-      (value, index, array) =>
-        value &&
-        array.indexOf(value) === index
-    );
+    const models = [
+      "google/gemini-3-flash-preview",
+      "google/gemini-2.5-flash",
+    ];
 
     let generated: any = null;
     let lastErrorText = "";
-    let lastModel = primaryModel;
+    let lastModel = models[0];
 
-    for (const model of fallbackModels) {
+    for (const model of models) {
       if (generated) {
         break;
       }
 
       console.log(
-        "Trying AI model:",
+        "Trying OpenRouter model:",
         model
       );
 
       try {
         const aiResponse = await fetch(
-          `${baseUrl}/chat/completions`,
+          "https://openrouter.ai/api/v1/chat/completions",
           {
             method: "POST",
 
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${apiKey}`,
+              "HTTP-Referer":
+                "https://bar-test-practice-public.vercel.app",
+              "X-Title":
+                "Philippine Bar Exam Practice",
             },
 
             body: JSON.stringify({
@@ -441,6 +436,10 @@ Return exactly:
 
               temperature: 0.2,
               max_tokens: 4000,
+
+              response_format: {
+                type: "json_object",
+              },
             }),
           }
         );
@@ -453,7 +452,7 @@ Return exactly:
           lastErrorText = errorText;
 
           console.error(
-            "AI model failed:",
+            "OpenRouter model failed:",
             {
               model,
               status: aiResponse.status,
@@ -463,10 +462,6 @@ Return exactly:
             }
           );
 
-          /*
-           * Try the next model rather than retrying
-           * the same unavailable model.
-           */
           continue;
         }
 
@@ -474,7 +469,7 @@ Return exactly:
           await aiResponse.json();
 
         console.log(
-          "AI response received:",
+          "OpenRouter response received:",
           {
             model,
             status: aiResponse.status,
@@ -491,10 +486,10 @@ Return exactly:
         if (!content) {
           lastModel = model;
           lastErrorText =
-            "The AI model returned an empty response.";
+            "OpenRouter returned an empty response.";
 
           console.error(
-            "Empty AI response:",
+            "Empty OpenRouter response:",
             {
               model,
               response: aiData,
@@ -544,7 +539,7 @@ Return exactly:
             "The AI model returned incomplete or invalid JSON.";
 
           console.error(
-            "Invalid JSON from model:",
+            "Invalid JSON from OpenRouter model:",
             {
               model,
               error:
@@ -563,16 +558,13 @@ Return exactly:
             : String(error);
 
         console.error(
-          "AI request error:",
+          "OpenRouter request error:",
           {
             model,
             error: lastErrorText,
           }
         );
 
-        /*
-         * Continue to the next available model.
-         */
         continue;
       }
     }
@@ -587,11 +579,10 @@ Return exactly:
 
           model: lastModel,
 
-          attemptedModels:
-            fallbackModels,
+          attemptedModels: models,
 
           hint:
-            "Check the OmniRoute logs for the attempted models.",
+            "Check the OpenRouter API response in the Vercel runtime logs.",
         },
         { status: 502 }
       );
