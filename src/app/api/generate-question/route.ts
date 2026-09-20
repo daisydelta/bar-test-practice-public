@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
@@ -19,6 +20,63 @@ function parseJsonResponse(text: string): any {
   }
 
   return JSON.parse(cleaned);
+}
+
+function isValidGeneratedQuestion(value: any): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  if (
+    typeof value.title !== "string" ||
+    !value.title.trim()
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value.factsIssue !== "string" ||
+    !value.factsIssue.trim()
+  ) {
+    return false;
+  }
+
+  if (
+    !value.recommendedAnswer ||
+    typeof value.recommendedAnswer !== "object"
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value.recommendedAnswer.answerA !== "string" ||
+    !value.recommendedAnswer.answerA.trim()
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value.recommendedAnswer.legalBasisL !== "string" ||
+    !value.recommendedAnswer.legalBasisL.trim()
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value.recommendedAnswer.applicationA !== "string" ||
+    !value.recommendedAnswer.applicationA.trim()
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value.recommendedAnswer.conclusionC !== "string" ||
+    !value.recommendedAnswer.conclusionC.trim()
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export async function POST(request: NextRequest) {
@@ -192,7 +250,7 @@ doctrines, citations, or legal exceptions.
 it as hypothetical.
 - Do not rely on an authority that is not included in the verified
 references.
-- Do not invent an exception simply to create a more interesting answer.
+- Do not invent an exception simply to create an interesting answer.
 - Do not ignore an applicable exception that is actually established
 by the supplied authorities.
 
@@ -304,196 +362,218 @@ Return exactly:
 }
 `;
 
-    const isVercel = process.env.VERCEL === "1";
-
-    const apiKey = isVercel
-      ? process.env.GEMINI_API_KEY
-      : process.env.OMNIROUTE_API_KEY;
+    const apiKey = process.env.OMNIROUTE_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
         {
-          error: isVercel
-            ? "GEMINI_API_KEY is not configured."
-            : "OMNIROUTE_API_KEY is not configured.",
+          error:
+            "OMNIROUTE_API_KEY is not configured.",
         },
         { status: 500 }
       );
     }
 
-    const baseUrl = isVercel
-      ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
-      : process.env.OMNIROUTE_BASE_URL ||
-        "http://localhost:20128/v1";
+    const baseUrl =
+      process.env.OMNIROUTE_BASE_URL ||
+      "http://localhost:20128/v1";
 
-    const model = isVercel
-      ? "gemini-3.6-flash"
-      : "free-ai/qwen7b";
+    /*
+     * Primary model comes from Vercel environment variables.
+     *
+     * If the primary model returns a provider error such as 503,
+     * automatically try the fallback models instead of retrying
+     * the same unavailable model.
+     */
+    const primaryModel =
+      process.env.OMNIROUTE_MODEL ||
+      "gemini-3-flash-preview";
+
+    const fallbackModels = [
+      primaryModel,
+      "gemini/gemini-3-flash-preview",
+      "gemini/gemini-2.5-flash",
+    ].filter(
+      (value, index, array) =>
+        value &&
+        array.indexOf(value) === index
+    );
 
     let generated: any = null;
     let lastErrorText = "";
+    let lastModel = primaryModel;
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (const model of fallbackModels) {
+      if (generated) {
+        break;
+      }
+
+      console.log(
+        "Trying AI model:",
+        model
+      );
+
       try {
-        console.log(
-          `AI generation attempt ${attempt}/2`,
-          {
-            provider: isVercel
-              ? "Gemini"
-              : "OmniRoute",
-            model,
-          }
-        );
-
         const aiResponse = await fetch(
-          baseUrl,
+          `${baseUrl}/chat/completions`,
           {
             method: "POST",
+
             headers: {
               "Content-Type": "application/json",
-              ...(isVercel
-                ? { "x-goog-api-key": apiKey }
-                : { Authorization: `Bearer ${apiKey}` }),
+              Authorization: `Bearer ${apiKey}`,
             },
-            body: JSON.stringify(
-              isVercel
-                ? {
-                    systemInstruction: {
-                      parts: [
-                        {
-                          text:
-                            "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent and concise.",
-                        },
-                      ],
-                    },
-                    contents: [
-                      {
-                        role: "user",
-                        parts: [{ text: prompt }],
-                      },
-                    ],
-                    generationConfig: {
-                      maxOutputTokens: 1000,
-                      responseMimeType: "application/json",
-                    },
-                  }
-                : {
-                    model,
-                    messages: [
-                      {
-                        role: "system",
-                        content:
-                          "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent and concise.",
-                      },
-                      {
-                        role: "user",
-                        content: prompt,
-                      },
-                    ],
-                    temperature: 0.2,
-                    max_tokens: 500,
-                  }
-            ),
+
+            body: JSON.stringify({
+              model,
+
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent, accurate, and concise.",
+                },
+                {
+                  role: "user",
+                  content: prompt,
+                },
+              ],
+
+              temperature: 0.2,
+              max_tokens: 4000,
+            }),
           }
         );
 
         if (!aiResponse.ok) {
-          lastErrorText =
+          const errorText =
             await aiResponse.text();
 
+          lastModel = model;
+          lastErrorText = errorText;
+
           console.error(
-            `AI generation attempt ${attempt} failed:`,
-            lastErrorText
+            "AI model failed:",
+            {
+              model,
+              status: aiResponse.status,
+              statusText:
+                aiResponse.statusText,
+              response: errorText,
+            }
           );
 
-          if (attempt < 2) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, 1000)
-            );
-          }
-
+          /*
+           * Try the next model rather than retrying
+           * the same unavailable model.
+           */
           continue;
         }
 
         const aiData =
           await aiResponse.json();
 
-        const content = isVercel
-          ? aiData?.candidates?.[0]?.content?.parts
-              ?.map((part: any) => part?.text || "")
-              .join("")
-          : aiData?.choices?.[0]?.message?.content;
+        console.log(
+          "AI response received:",
+          {
+            model,
+            status: aiResponse.status,
+            finishReason:
+              aiData?.choices?.[0]
+                ?.finish_reason,
+          }
+        );
+
+        const content =
+          aiData?.choices?.[0]?.message
+            ?.content;
 
         if (!content) {
+          lastModel = model;
           lastErrorText =
             "The AI model returned an empty response.";
 
-          if (attempt < 2) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, 1000)
-            );
-          }
+          console.error(
+            "Empty AI response:",
+            {
+              model,
+              response: aiData,
+            }
+          );
 
           continue;
         }
 
         try {
-          generated =
+          const parsed =
             parseJsonResponse(
               String(content)
             );
+
+          if (
+            isValidGeneratedQuestion(
+              parsed
+            )
+          ) {
+            generated = parsed;
+
+            console.log(
+              "Valid question generated:",
+              {
+                model,
+              }
+            );
+
+            break;
+          }
+
+          lastModel = model;
+          lastErrorText =
+            "The generated question is missing required fields.";
+
+          console.error(
+            "Generated question failed validation:",
+            {
+              model,
+              generated: parsed,
+            }
+          );
         } catch (error) {
+          lastModel = model;
           lastErrorText =
             "The AI model returned incomplete or invalid JSON.";
 
           console.error(
             "Invalid JSON from model:",
-            content
-          );
-
-          if (attempt < 2) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, 1000)
-            );
-          }
-
-          continue;
-        }
-
-        if (
-          generated?.title &&
-          generated?.factsIssue &&
-          generated?.recommendedAnswer
-        ) {
-          break;
-        }
-
-        generated = null;
-
-        lastErrorText =
-          "The generated question is missing required fields.";
-
-        if (attempt < 2) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000)
+            {
+              model,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : String(error),
+              content,
+            }
           );
         }
       } catch (error) {
+        lastModel = model;
         lastErrorText =
           error instanceof Error
             ? error.message
             : String(error);
 
         console.error(
-          `AI generation attempt ${attempt} error:`,
-          lastErrorText
+          "AI request error:",
+          {
+            model,
+            error: lastErrorText,
+          }
         );
 
-        if (attempt < 2) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000)
-          );
-        }
+        /*
+         * Continue to the next available model.
+         */
+        continue;
       }
     }
 
@@ -501,11 +581,17 @@ Return exactly:
       return NextResponse.json(
         {
           error:
-            "The AI model could not generate a valid question after retry.",
+            "The AI models could not generate a valid question.",
+
           details: lastErrorText,
-          diagnostic: isVercel
-            ? "Gemini production generation failed. The details field contains the API response."
-            : undefined,
+
+          model: lastModel,
+
+          attemptedModels:
+            fallbackModels,
+
+          hint:
+            "Check the OmniRoute logs for the attempted models.",
         },
         { status: 502 }
       );
@@ -557,15 +643,19 @@ Return exactly:
           ),
 
           legalReferences: {
-            connect: verifiedReferences.map((ref) => ({
-              id: ref.id,
-            })),
+            connect:
+              verifiedReferences.map(
+                (ref) => ({
+                  id: ref.id,
+                })
+              ),
           },
         },
       });
 
     return NextResponse.json({
       success: true,
+
       question,
 
       verificationStatus:

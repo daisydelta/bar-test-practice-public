@@ -65,35 +65,21 @@ export class AIEvaluationService implements IEvaluationService {
       throw new Error(`Question with id ${questionId} not found`);
     }
 
-    /*
-     * LOCAL:
-     *   OmniRoute → Qwen7B
-     *
-     * VERCEL:
-     *   OpenRouter → hosted model
-     */
-    const isVercel = process.env.VERCEL === "1";
-
-    const apiKey = isVercel
-      ? process.env.OPENROUTER_API_KEY
-      : process.env.OMNIROUTE_API_KEY;
+    const apiKey = process.env.OMNIROUTE_API_KEY;
 
     if (!apiKey) {
       throw new Error(
-        isVercel
-          ? "OPENROUTER_API_KEY is not configured."
-          : "OMNIROUTE_API_KEY is not configured."
+        "OMNIROUTE_API_KEY is not configured."
       );
     }
 
-    const baseUrl = isVercel
-      ? "https://openrouter.ai/api/v1"
-      : process.env.OMNIROUTE_BASE_URL ||
-        "http://localhost:20128/v1";
+    const baseUrl =
+      process.env.OMNIROUTE_BASE_URL ||
+      "http://localhost:20128/v1";
 
-    const model = isVercel
-      ? "openrouter/free"
-      : "free-ai/qwen7b";
+    const model =
+      process.env.OMNIROUTE_MODEL ||
+      "no-think/zenmux/anthropic/claude-sonnet-4.6";
 
     const verifiedReferences = question.legalReferences
       .filter((ref) => ref.verificationStatus === "VERIFIED")
@@ -179,14 +165,6 @@ Rules:
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
-          ...(isVercel
-            ? {
-                "HTTP-Referer":
-                  "https://bar-test-practice.vercel.app",
-                "X-Title":
-                  "Philippine Bar Test Practice",
-              }
-            : {}),
         },
         body: JSON.stringify({
           model,
@@ -212,11 +190,12 @@ Rules:
     if (!response.ok) {
       throw new Error(
         data?.error?.message ||
-          "AI evaluation request failed."
+          "OmniRoute request failed."
       );
     }
 
-    const text = data?.choices?.[0]?.message?.content;
+    const text =
+      data?.choices?.[0]?.message?.content;
 
     if (!text) {
       throw new Error(
