@@ -322,12 +322,12 @@ Return exactly:
     }
 
     const baseUrl = isVercel
-      ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+      ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
       : process.env.OMNIROUTE_BASE_URL ||
         "http://localhost:20128/v1";
 
     const model = isVercel
-      ? "gemini-2.5-flash-lite"
+      ? "gemini-2.5-flash"
       : "free-ai/qwen7b";
 
     let generated: any = null;
