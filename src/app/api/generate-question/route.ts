@@ -504,6 +504,9 @@ Return exactly:
           error:
             "The AI model could not generate a valid question after retry.",
           details: lastErrorText,
+          diagnostic: isVercel
+            ? "Gemini production generation failed. The details field contains the API response."
+            : undefined,
         },
         { status: 502 }
       );
