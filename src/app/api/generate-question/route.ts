@@ -307,14 +307,14 @@ Return exactly:
     const isVercel = process.env.VERCEL === "1";
 
     const apiKey = isVercel
-      ? process.env.OPENROUTER_API_KEY
+      ? process.env.GEMINI_API_KEY
       : process.env.OMNIROUTE_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
         {
           error: isVercel
-            ? "OPENROUTER_API_KEY is not configured."
+            ? "GEMINI_API_KEY is not configured."
             : "OMNIROUTE_API_KEY is not configured.",
         },
         { status: 500 }
@@ -322,12 +322,12 @@ Return exactly:
     }
 
     const baseUrl = isVercel
-      ? "https://openrouter.ai/api/v1"
+      ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
       : process.env.OMNIROUTE_BASE_URL ||
         "http://localhost:20128/v1";
 
     const model = isVercel
-      ? "openrouter/free"
+      ? "gemini-2.5-flash-lite"
       : "free-ai/qwen7b";
 
     let generated: any = null;
@@ -346,41 +346,55 @@ Return exactly:
         );
 
         const aiResponse = await fetch(
-          `${baseUrl}/chat/completions`,
+          baseUrl,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-
               ...(isVercel
-                ? {
-                    "HTTP-Referer":
-                      "https://bar-test-practice.vercel.app",
-                    "X-Title":
-                      "Philippine Bar Test Practice",
-                  }
-                : {}),
+                ? { "x-goog-api-key": apiKey }
+                : { Authorization: `Bearer ${apiKey}` }),
             },
-
-            body: JSON.stringify({
-              model,
-
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent and concise.",
-                },
-                {
-                  role: "user",
-                  content: prompt,
-                },
-              ],
-
-              temperature: 0.2,
-              max_tokens: 500,
-            }),
+            body: JSON.stringify(
+              isVercel
+                ? {
+                    systemInstruction: {
+                      parts: [
+                        {
+                          text:
+                            "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent and concise.",
+                        },
+                      ],
+                    },
+                    contents: [
+                      {
+                        role: "user",
+                        parts: [{ text: prompt }],
+                      },
+                    ],
+                    generationConfig: {
+                      temperature: 0.2,
+                      maxOutputTokens: 1000,
+                      responseMimeType: "application/json",
+                    },
+                  }
+                : {
+                    model,
+                    messages: [
+                      {
+                        role: "system",
+                        content:
+                          "You are a Philippine Bar Examination question writer. Return valid JSON only. Keep the question legally coherent and concise.",
+                      },
+                      {
+                        role: "user",
+                        content: prompt,
+                      },
+                    ],
+                    temperature: 0.2,
+                    max_tokens: 500,
+                  }
+            ),
           }
         );
 
@@ -405,8 +419,11 @@ Return exactly:
         const aiData =
           await aiResponse.json();
 
-        const content =
-          aiData?.choices?.[0]?.message?.content;
+        const content = isVercel
+          ? aiData?.candidates?.[0]?.content?.parts
+              ?.map((part: any) => part?.text || "")
+              .join("")
+          : aiData?.choices?.[0]?.message?.content;
 
         if (!content) {
           lastErrorText =
