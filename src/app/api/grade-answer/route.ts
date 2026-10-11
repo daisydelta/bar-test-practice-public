@@ -1,33 +1,41 @@
+
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    const apiKey = process.env.OMNIROUTE_API_KEY;
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return NextResponse.json(
+        { error: "A prompt is required." },
+        { status: 400 }
+      );
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "OMNIROUTE_API_KEY is not configured." },
+        { error: "OPENROUTER_API_KEY is not configured." },
         { status: 500 }
       );
     }
 
-    const baseUrl =
-      process.env.OMNIROUTE_BASE_URL ||
-      "http://localhost:20128/v1";
-
     const model =
-      process.env.OMNIROUTE_MODEL ||
-      "no-think/zenmux/anthropic/claude-sonnet-4.6";
+      process.env.OPENROUTER_MODEL ||
+      "google/gemini-2.5-flash";
 
     const response = await fetch(
-      `${baseUrl}/chat/completions`,
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer":
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            "https://bar-test-practice-public.vercel.app",
+          "X-Title": "Bar Test Practice",
         },
         body: JSON.stringify({
           model,
@@ -49,14 +57,20 @@ export async function POST(req: Request) {
         {
           error:
             data?.error?.message ||
-            "OmniRoute request failed.",
+            "OpenRouter request failed.",
         },
         { status: response.status }
       );
     }
 
-    const text =
-      data?.choices?.[0]?.message?.content;
+    const text = data?.choices?.[0]?.message?.content;
+
+    if (typeof text !== "string" || !text.trim()) {
+      return NextResponse.json(
+        { error: "OpenRouter returned an empty response." },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({ text });
   } catch (error) {
