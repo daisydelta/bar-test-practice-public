@@ -386,9 +386,8 @@ Return exactly:
     }
 
     const models = [
-      "google/gemini-3-flash-preview",
-      "google/gemini-2.5-flash",
-    ];
+  "openrouter/free",
+];
 
     let generated: any = null;
     let lastErrorText = "";
